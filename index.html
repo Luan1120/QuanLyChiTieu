@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="vi" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ví Cá Nhân - Quản Lý Chi Tiêu</title>
+    <link rel="manifest" href="manifest.json">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js cho biểu đồ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        skyTheme: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#075985',
+                            950: '#082f49'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Đồng bộ màu sắc bộ chọn ngày/tháng chuẩn hệ thống */
+        input[type="date"],
+        input[type="month"] {
+            color-scheme: light;
+        }
+        .dark input[type="date"],
+        .dark input[type="month"] {
+            color-scheme: dark;
+        }
+
+        /* Tùy chỉnh hiển thị tháng thành dạng Tháng 11/2026 đẹp mắt */
+        .month-picker-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .month-picker-wrapper input[type="month"] {
+            position: relative;
+            background: transparent;
+            color: transparent;
+            z-index: 2;
+            cursor: pointer;
+        }
+        .month-picker-wrapper input[type="month"]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            right: 8px;
+            opacity: 0.7;
+            cursor: pointer;
+        }
+        .month-display-overlay {
+            position: absolute;
+            left: 10px;
+            right: 28px;
+            pointer-events: none;
+            z-index: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .tab-content { animation: fadeIn 0.2s ease-in-out; }
+    </style>
+</head>
+<body id="app-body" class="bg-slate-100 dark:bg-slate-950 min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
+
+    <!-- Khung Điện Thoại Di Động -->
+    <div id="phone-frame" class="relative w-full max-w-[390px] h-[780px] bg-slate-50 dark:bg-slate-900 rounded-[40px] shadow-2xl border-[8px] border-slate-800 dark:border-slate-700 overflow-hidden flex flex-col transition-colors duration-300">
+        
+        <!-- Phần đầu ứng dụng -->
+        <div class="px-5 py-3 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/60" id="header-container">
+            <div class="min-w-0 pr-2">
+                <button type="button" onclick="openGreetingModal()" class="text-left group flex items-center gap-1 max-w-full" title="Nhấn để đổi lời chào">
+                    <span id="greeting-text" class="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-skyTheme-600 dark:group-hover:text-skyTheme-400 truncate transition">Xin chào bạn,</span>
+                    <i data-lucide="pencil" class="w-2.5 h-2.5 text-slate-400 group-hover:text-skyTheme-600 dark:group-hover:text-skyTheme-400 flex-shrink-0 transition"></i>
+                </button>
+                <h2 id="current-month-label" class="text-base font-bold">Hôm nay</h2>
+            </div>
+            <div class="flex items-center gap-1.5 flex-shrink-0 z-20">
+                <!-- Nút Sáng / Tối -->
+                <button onclick="toggleTheme()" class="p-2 rounded-2xl bg-white dark:bg-slate-800 shadow-xs border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-amber-400" title="Đổi giao diện sáng/tối" aria-label="Đổi giao diện sáng/tối">
+                    <i id="theme-icon" data-lucide="moon" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Thanh chọn kỳ (Đồng nhất ô chọn chuẩn trình duyệt cho Ngày và Tháng) -->
+        <div class="px-4 py-2 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/70">
+            <div class="grid grid-cols-[32px_68px_minmax(0,1fr)_32px] items-center gap-1.5">
+                <button onclick="changePeriod(-1)" class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" title="Kỳ trước" aria-label="Kỳ trước">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+                <button id="period-mode-button" onclick="cyclePeriodMode()" class="h-8 px-1.5 rounded-xl bg-skyTheme-50 dark:bg-skyTheme-950/60 border border-skyTheme-200 dark:border-skyTheme-800 text-skyTheme-700 dark:text-skyTheme-300 text-xs font-bold text-center truncate" title="Nhấn để đổi chế độ">
+                    Ngày
+                </button>
+
+                <!-- Input chọn Ngày (chuẩn trình duyệt dd/mm/yyyy) -->
+                <input id="period-date-input" type="date" onchange="setSelectedDatePeriod()" aria-label="Chọn ngày" class="h-8 min-w-0 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+
+                <!-- Input chọn Tháng (hiển thị đẹp dạng Tháng 11/2026) -->
+                <div id="period-month-wrapper" class="hidden month-picker-wrapper h-8 min-w-0 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus-within:ring-2 focus-within:ring-skyTheme-500">
+                    <span id="period-month-display" class="month-display-overlay text-xs font-semibold text-slate-900 dark:text-slate-100">Tháng 11/2026</span>
+                    <input id="period-month-input" type="month" onchange="setSelectedMonthPeriod()" aria-label="Chọn tháng" class="h-full w-full px-2.5 text-xs font-semibold focus:outline-none">
+                </div>
+
+                <!-- Bộ chọn Năm -->
+                <select id="period-year" onchange="setSelectedYearPeriod()" aria-label="Chọn năm" class="hidden h-8 min-w-0 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-skyTheme-500"></select>
+
+                <button onclick="changePeriod(1)" class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" title="Kỳ sau" aria-label="Kỳ sau">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Khu vực cuộn nội dung chính -->
+        <main class="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 pt-3 space-y-4">
+
+            <!-- ================= TAB 1: TỔNG QUAN ================= -->
+            <section id="view-dashboard" class="tab-content space-y-4">
+                
+                <!-- Thẻ Tổng Số Dư (Giao diện chuẩn màu xanh dương nhạt) -->
+                <div id="balance-card" class="rounded-3xl bg-gradient-to-br from-skyTheme-500 via-skyTheme-600 to-skyTheme-700 p-5 text-white shadow-lg shadow-skyTheme-500/25 transition-all duration-300">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p id="balance-period-label" class="text-skyTheme-100 text-[11px] font-medium uppercase tracking-wider">Số dư trong ngày</p>
+                            <h2 id="total-balance" class="text-3xl font-bold mt-1 tracking-tight">0 ₫</h2>
+                        </div>
+                        <button onclick="resetData()" title="Xóa tất cả dữ liệu" class="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-skyTheme-100 transition text-[11px] flex items-center gap-1">
+                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Đặt lại
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-white/15">
+                        <div class="flex items-center gap-2.5 bg-white/10 rounded-2xl p-2.5">
+                            <div class="w-7 h-7 rounded-xl bg-emerald-400/20 flex items-center justify-center text-emerald-300">
+                                <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-skyTheme-100">Tổng thu</p>
+                                <p id="total-income" class="text-xs font-semibold text-emerald-300">0 ₫</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2.5 bg-white/10 rounded-2xl p-2.5">
+                            <div class="w-7 h-7 rounded-xl bg-rose-400/20 flex items-center justify-center text-rose-300">
+                                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-skyTheme-100">Tổng chi</p>
+                                <p id="total-expense" class="text-xs font-semibold text-rose-300">0 ₫</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- So sánh với kỳ trước -->
+                <div class="bg-white dark:bg-slate-800/90 rounded-3xl p-4 shadow-xs border border-slate-100 dark:border-slate-800">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 id="comparison-title" class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">So với ngày trước</h3>
+                        <span id="savings-rate" class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 font-bold">Tiết kiệm 0%</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/60 p-3">
+                            <p class="text-[10px] text-slate-400">Thu nhập</p>
+                            <p id="income-change" class="text-sm font-bold mt-1">0%</p>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 dark:bg-slate-900/60 p-3">
+                            <p class="text-[10px] text-slate-400">Chi tiêu</p>
+                            <p id="expense-change" class="text-sm font-bold mt-1">0%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Biểu đồ phân bổ chi tiêu -->
+                <div class="bg-white dark:bg-slate-800/90 rounded-3xl p-4 shadow-xs border border-slate-100 dark:border-slate-800">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Phân bổ chi tiêu</h3>
+                        <span id="chart-total-label" class="text-xs font-semibold">0 ₫</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-28 h-28 relative flex-shrink-0">
+                            <canvas id="expenseChart"></canvas>
+                        </div>
+                        <div id="chart-legend" class="flex-1 space-y-1.5 text-xs max-h-28 overflow-y-auto pr-1">
+                            <!-- Hiển thị bằng JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Giao dịch gần đây -->
+                <div>
+                    <div class="flex items-center justify-between mb-2.5">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Giao dịch gần đây</h3>
+                        <button onclick="switchTab('history')" class="text-xs font-semibold text-skyTheme-600 dark:text-skyTheme-400 hover:underline">
+                            Xem tất cả
+                        </button>
+                    </div>
+                    <div id="recent-transactions" class="space-y-2">
+                        <!-- Hiển thị bằng JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= TAB 2: LỊCH SỬ ================= -->
+            <section id="view-history" class="tab-content hidden space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold">Lịch sử giao dịch</h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportCsv()" class="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold flex items-center gap-1" title="Xuất tệp bảng tính CSV">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Xuất bảng tính
+                        </button>
+                        <span id="history-count" class="text-xs px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-800 font-medium">0 giao dịch</span>
+                    </div>
+                </div>
+
+                <!-- Bộ lọc -->
+                <div class="flex gap-2">
+                    <select id="filter-type" onchange="renderHistory()" class="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+                        <option value="all">Tất cả loại</option>
+                        <option value="expense">Khoản Chi</option>
+                        <option value="income">Khoản Thu</option>
+                    </select>
+                    <select id="filter-category" onchange="renderHistory()" class="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+                        <option value="all">Mọi danh mục</option>
+                    </select>
+                </div>
+
+                <div id="full-history-list" class="space-y-2">
+                    <!-- Hiển thị bằng JS -->
+                </div>
+            </section>
+
+        </main>
+
+        <!-- ================= HỘP THOẠI TÙY CHỈNH LỜI CHÀO ================= -->
+        <div id="greeting-modal" class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-40 hidden flex-col justify-center px-5">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold">Tùy chỉnh lời chào</h3>
+                    <button type="button" onclick="closeGreetingModal()" class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <form onsubmit="saveGreetingSettings(event)" class="space-y-3">
+                    <!-- Chọn 2 chế độ: Hệ thống / Tự nhập -->
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                        <button type="button" id="btn-greet-system" onclick="setGreetingMode('system')" class="py-2 rounded-xl text-xs font-semibold bg-skyTheme-600 text-white shadow-xs transition">
+                            Hệ thống
+                        </button>
+                        <button type="button" id="btn-greet-custom" onclick="setGreetingMode('custom')" class="py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 transition">
+                            Tự nhập
+                        </button>
+                    </div>
+
+                    <div>
+                        <label id="greeting-input-label" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Nhập tên của bạn</label>
+                        <input type="text" id="greeting-input" oninput="updateGreetingPreview()" placeholder="Ví dụ: Luân" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+                    </div>
+
+                    <div class="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700/70">
+                        <p class="text-[10px] text-slate-400">Hiển thị xem trước:</p>
+                        <p id="greeting-preview" class="text-xs font-bold text-skyTheme-600 dark:text-skyTheme-400 mt-0.5">Xin chào bạn,</p>
+                    </div>
+
+                    <button type="submit" class="w-full py-2.5 rounded-2xl bg-skyTheme-600 hover:bg-skyTheme-700 text-white font-semibold text-xs shadow-md shadow-skyTheme-500/30 transition">
+                        Lưu lời chào
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ================= HỘP THOẠI THÊM / SỬA GIAO DỊCH ================= -->
+        <div id="add-modal" class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-30 hidden flex-col justify-end">
+            <div class="bg-white dark:bg-slate-900 rounded-t-[32px] p-5 shadow-2xl border-t border-slate-200 dark:border-slate-800">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 id="transaction-modal-title" class="text-sm font-bold">Thêm giao dịch mới</h3>
+                    <button onclick="closeAddModal()" class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <form id="transaction-form" onsubmit="handleAddTransaction(event)" class="space-y-3">
+                    <!-- Loại Thu / Chi -->
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                        <button type="button" id="btn-type-expense" onclick="setTransactionType('expense')" class="py-2 rounded-xl text-xs font-semibold bg-rose-500 text-white shadow-xs transition">
+                            Chi (-)
+                        </button>
+                        <button type="button" id="btn-type-income" onclick="setTransactionType('income')" class="py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 transition">
+                            Thu (+)
+                        </button>
+                    </div>
+
+                    <!-- Số tiền -->
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Số tiền (VNĐ)</label>
+                        <div class="relative">
+                            <input type="text" inputmode="numeric" id="input-amount" required placeholder="50.000" oninput="handleAmountInput(this)" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 pr-10 text-base font-bold focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₫</span>
+                        </div>
+                        <div id="amount-suggestions" class="hidden grid grid-cols-2 gap-1.5 mt-2"></div>
+                    </div>
+
+                    <!-- Danh mục -->
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Danh mục</label>
+                        <div id="category-selector" class="grid grid-cols-3 gap-1.5">
+                            <!-- Hiển thị bằng JS -->
+                        </div>
+                    </div>
+
+                    <!-- Ngày giao dịch (Chuẩn input date giống thanh chọn kỳ) & Ghi chú -->
+                    <div class="grid grid-cols-1 gap-2">
+                        <div>
+                            <label for="input-date" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Ngày giao dịch</label>
+                            <input type="date" id="input-date" required class="w-full h-9 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Ghi chú</label>
+                            <input type="text" id="input-note" placeholder="Ăn trưa, đổ xăng..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-skyTheme-500">
+                        </div>
+                    </div>
+
+                    <button id="transaction-submit-button" type="submit" class="w-full py-3 rounded-2xl bg-skyTheme-600 hover:bg-skyTheme-700 active:scale-[0.99] text-white font-semibold text-xs shadow-lg shadow-skyTheme-500/30 transition">
+                        Lưu Giao Dịch
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Thông báo nổi -->
+        <div id="toast-msg" class="absolute top-16 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 rounded-full text-[11px] font-medium shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-50 whitespace-nowrap">
+            Thành công!
+        </div>
+
+        <!-- Thanh điều hướng dưới cùng -->
+        <nav class="absolute bottom-0 inset-x-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 px-6 flex items-center justify-between z-20">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center gap-0.5 text-skyTheme-600 dark:text-skyTheme-400 transition">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                <span class="text-[10px] font-semibold">Tổng quan</span>
+            </button>
+
+            <!-- Nút Thêm Nổi -->
+            <button onclick="openAddModal()" aria-label="Thêm giao dịch" class="-mt-6 w-12 h-12 rounded-2xl bg-skyTheme-600 hover:bg-skyTheme-700 active:scale-95 text-white shadow-lg shadow-skyTheme-500/40 flex items-center justify-center transition">
+                <i data-lucide="plus" class="w-6 h-6"></i>
+            </button>
+
+            <button onclick="switchTab('history')" id="nav-history" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition">
+                <i data-lucide="history" class="w-5 h-5"></i>
+                <span class="text-[10px] font-medium">Lịch sử</span>
+            </button>
+        </nav>
+
+        <!-- Thanh chỉ báo đáy màn hình -->
+        <div class="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-28 h-1 bg-slate-300 dark:bg-slate-700 rounded-full z-20"></div>
+    </div>
+
+    <!-- Xử lý Logic & Lưu trữ cục bộ -->
+    <script>
+        const CATEGORIES = {
+            food: { name: 'Ăn uống', icon: 'utensils', color: '#0ea5e9', bg: 'bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400' },
+            transport: { name: 'Đi lại', icon: 'car', color: '#38bdf8', bg: 'bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400' },
+            housing: { name: 'Nhà ở', icon: 'home', color: '#6366f1', bg: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400' },
+            entertainment: { name: 'Giải trí', icon: 'gamepad-2', color: '#ec4899', bg: 'bg-pink-100 text-pink-600 dark:bg-pink-950/60 dark:text-pink-400' },
+            other: { name: 'Khác', icon: 'layers', color: '#64748b', bg: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
+            salary: { name: 'Lương', icon: 'wallet', color: '#10b981', bg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400' }
+        };
+
+        const now = new Date();
+        function toLocalIsoDate(dateObj) {
+            return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+        }
+
+        // Dữ liệu giao dịch
+        let transactions = JSON.parse(localStorage.getItem('vi_can_than_tx')) || [
+            { id: 1, type: 'income', category: 'salary', amount: 15000000, date: toLocalIsoDate(now), note: 'Lương tháng' },
+            { id: 2, type: 'expense', category: 'food', amount: 120000, date: toLocalIsoDate(now), note: 'Ăn trưa' },
+            { id: 3, type: 'expense', category: 'transport', amount: 50000, date: toLocalIsoDate(now), note: 'Đổ xăng' }
+        ];
+
+        // Dọn dẹp cấu hình chủ đề cũ nếu có
+        localStorage.removeItem('vi_ca_nhan_pet_theme');
+
+        // Lời chào cá nhân
+        let greetingConfig = JSON.parse(localStorage.getItem('vi_ca_nhan_greeting')) || {
+            mode: 'system',
+            value: ''
+        };
+        let tempGreetingMode = greetingConfig.mode;
+
+        let currentTransactionType = 'expense';
+        let selectedCategory = 'food';
+        let expenseChartInstance = null;
+        let periodMode = 'day';
+        let selectedDay = now.getDate();
+        let selectedMonth = now.getMonth();
+        let selectedYear = now.getFullYear();
+        let editingTransactionId = null;
+
+        function saveToLocalStorage() {
+            localStorage.setItem('vi_can_than_tx', JSON.stringify(transactions));
+        }
+
+        function formatVND(amount) {
+            return amount.toLocaleString('vi-VN') + ' ₫';
+        }
+
+        function formatDate(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-msg');
+            toast.textContent = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 2200);
+        }
+
+        // --- XỬ LÝ LỜI CHÀO ---
+        function computeGreetingText(mode, value) {
+            const trimmed = (value || '').trim();
+            if (mode === 'custom') {
+                return trimmed || 'Xin chào bạn,';
+            }
+            return trimmed ? `Xin chào ${trimmed},` : 'Xin chào bạn,';
+        }
+
+        function renderGreeting() {
+            document.getElementById('greeting-text').textContent = computeGreetingText(greetingConfig.mode, greetingConfig.value);
+        }
+
+        function openGreetingModal() {
+            tempGreetingMode = greetingConfig.mode;
+            document.getElementById('greeting-input').value = greetingConfig.value || '';
+            setGreetingMode(tempGreetingMode);
+            document.getElementById('greeting-modal').classList.remove('hidden');
+            document.getElementById('greeting-modal').classList.add('flex');
+            lucide.createIcons();
+            setTimeout(() => document.getElementById('greeting-input').focus(), 50);
+        }
+
+        function closeGreetingModal() {
+            document.getElementById('greeting-modal').classList.add('hidden');
+            document.getElementById('greeting-modal').classList.remove('flex');
+        }
+
+        function setGreetingMode(mode) {
+            tempGreetingMode = mode;
+            const btnSys = document.getElementById('btn-greet-system');
+            const btnCus = document.getElementById('btn-greet-custom');
+            const label = document.getElementById('greeting-input-label');
+            const input = document.getElementById('greeting-input');
+
+            if (mode === 'system') {
+                btnSys.className = 'py-2 rounded-xl text-xs font-semibold bg-skyTheme-600 text-white shadow-xs transition';
+                btnCus.className = 'py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 transition';
+                label.textContent = 'Nhập tên của bạn (hệ thống tự thêm "Xin chào ...")';
+                input.placeholder = 'Ví dụ: Luân';
+            } else {
+                btnCus.className = 'py-2 rounded-xl text-xs font-semibold bg-skyTheme-600 text-white shadow-xs transition';
+                btnSys.className = 'py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 transition';
+                label.textContent = 'Nhập nội dung hiển thị trực tiếp';
+                input.placeholder = 'Ví dụ: ABC';
+            }
+            updateGreetingPreview();
+        }
+
+        function updateGreetingPreview() {
+            const val = document.getElementById('greeting-input').value;
+            document.getElementById('greeting-preview').textContent = computeGreetingText(tempGreetingMode, val);
+        }
+
+        function saveGreetingSettings(e) {
+            e.preventDefault();
+            greetingConfig = {
+                mode: tempGreetingMode,
+                value: document.getElementById('greeting-input').value.trim()
+            };
+            localStorage.setItem('vi_ca_nhan_greeting', JSON.stringify(greetingConfig));
+            renderGreeting();
+            closeGreetingModal();
+            showToast('Đã cập nhật lời chào!');
+        }
+
+        // --- GIAO DIỆN & CHUYỂN TAB ---
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            html.classList.toggle('dark');
+            const isDark = html.classList.contains('dark');
+            icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+            lucide.createIcons();
+            updateDashboard();
+        }
+
+        function switchTab(tabName) {
+            const dashboardView = document.getElementById('view-dashboard');
+            const historyView = document.getElementById('view-history');
+            const navDash = document.getElementById('nav-dashboard');
+            const navHist = document.getElementById('nav-history');
+
+            if (tabName === 'dashboard') {
+                dashboardView.classList.remove('hidden');
+                historyView.classList.add('hidden');
+                navDash.className = 'flex flex-col items-center gap-0.5 text-skyTheme-600 dark:text-skyTheme-400 transition';
+                navHist.className = 'flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition';
+            } else {
+                dashboardView.classList.add('hidden');
+                historyView.classList.remove('hidden');
+                navHist.className = 'flex flex-col items-center gap-0.5 text-skyTheme-600 dark:text-skyTheme-400 transition';
+                navDash.className = 'flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition';
+                renderHistory();
+            }
+        }
+
+        // --- BỘ CHỌN KỲ THỜI GIAN (CHUẨN INPUT DATE & MONTH ĐỒNG NHẤT) ---
+        function populateSelectOptions(selectEl, items, selectedVal) {
+            selectEl.innerHTML = items.map(item =>
+                `<option value="${item.value}" ${String(item.value) === String(selectedVal) ? 'selected' : ''}>${item.label}</option>`
+            ).join('');
+        }
+
+        function getYearItems() {
+            const items = [];
+            for (let y = now.getFullYear() - 10; y <= now.getFullYear() + 2; y++) {
+                items.push({ value: y, label: `Năm ${y}` });
+            }
+            if (!items.some(i => i.value === selectedYear)) {
+                items.push({ value: selectedYear, label: `Năm ${selectedYear}` });
+                items.sort((a, b) => a.value - b.value);
+            }
+            return items;
+        }
+
+        function getTransactionDate(t) {
+            const [year, month, day] = t.date.split('-').map(Number);
+            return { year, month: month - 1, day };
+        }
+
+        function isInPeriod(t, month, year, day = selectedDay) {
+            const date = getTransactionDate(t);
+            if (periodMode === 'year') return date.year === year;
+            if (periodMode === 'day') return date.year === year && date.month === month && date.day === day;
+            return date.year === year && date.month === month;
+        }
+
+        function getPeriodTransactions(month = selectedMonth, year = selectedYear, day = selectedDay) {
+            return transactions.filter(t => isInPeriod(t, month, year, day));
+        }
+
+        function getPeriodTotals(list) {
+            const income = list.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+            const expense = list.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+            return { income, expense, balance: income - expense };
+        }
+
+        function getPreviousPeriod() {
+            if (periodMode === 'year') return { month: selectedMonth, year: selectedYear - 1 };
+            if (periodMode === 'day') {
+                const date = new Date(selectedYear, selectedMonth, selectedDay - 1);
+                return { day: date.getDate(), month: date.getMonth(), year: date.getFullYear() };
+            }
+            if (selectedMonth === 0) return { month: 11, year: selectedYear - 1 };
+            return { month: selectedMonth - 1, year: selectedYear };
+        }
+
+        function formatPercentChange(current, previous) {
+            if (previous === 0) return current === 0 ? '0%' : '+100%';
+            const change = ((current - previous) / previous) * 100;
+            return `${change >= 0 ? '+' : ''}${Math.round(change)}%`;
+        }
+
+        function changePeriod(direction) {
+            if (periodMode === 'year') {
+                selectedYear += direction;
+            } else if (periodMode === 'day') {
+                const date = new Date(selectedYear, selectedMonth, selectedDay + direction);
+                selectedDay = date.getDate();
+                selectedMonth = date.getMonth();
+                selectedYear = date.getFullYear();
+            } else {
+                const date = new Date(selectedYear, selectedMonth + direction, 1);
+                selectedYear = date.getFullYear();
+                selectedMonth = date.getMonth();
+            }
+            syncPeriodControls();
+            updateDashboard();
+            renderHistory();
+        }
+
+        function setPeriodMode(mode) {
+            periodMode = mode;
+            syncPeriodControls();
+            updateDashboard();
+            renderHistory();
+        }
+
+        function cyclePeriodMode() {
+            const modes = ['day', 'month', 'year'];
+            const nextIndex = (modes.indexOf(periodMode) + 1) % modes.length;
+            setPeriodMode(modes[nextIndex]);
+        }
+
+        function setSelectedDatePeriod() {
+            const val = document.getElementById('period-date-input').value;
+            if (!val) return;
+            const [y, m, d] = val.split('-').map(Number);
+            selectedYear = y;
+            selectedMonth = m - 1;
+            selectedDay = d;
+            updateDashboard();
+            renderHistory();
+        }
+
+        function setSelectedMonthPeriod() {
+            const val = document.getElementById('period-month-input').value;
+            if (!val) return;
+            const [y, m] = val.split('-').map(Number);
+            selectedYear = y;
+            selectedMonth = m - 1;
+            updateDashboard();
+            renderHistory();
+        }
+
+        function setSelectedYearPeriod() {
+            selectedYear = parseInt(document.getElementById('period-year').value, 10);
+            updateDashboard();
+            renderHistory();
+        }
+
+        function syncPeriodControls() {
+            const dateInput = document.getElementById('period-date-input');
+            const monthWrapper = document.getElementById('period-month-wrapper');
+            const monthInput = document.getElementById('period-month-input');
+            const monthDisplay = document.getElementById('period-month-display');
+            const yearSelect = document.getElementById('period-year');
+            const modeButton = document.getElementById('period-mode-button');
+
+            dateInput.classList.toggle('hidden', periodMode !== 'day');
+            monthWrapper.classList.toggle('hidden', periodMode !== 'month');
+            yearSelect.classList.toggle('hidden', periodMode !== 'year');
+
+            modeButton.textContent =
+                periodMode === 'day' ? 'Ngày'
+                    : periodMode === 'month' ? 'Tháng'
+                        : 'Năm';
+
+            const maxDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+            if (selectedDay > maxDay) selectedDay = maxDay;
+
+            const mm = String(selectedMonth + 1).padStart(2, '0');
+            const dd = String(selectedDay).padStart(2, '0');
+
+            // Đồng bộ giá trị chuẩn ISO cho input type="date" và type="month"
+            dateInput.value = `${selectedYear}-${mm}-${dd}`;
+            monthInput.value = `${selectedYear}-${mm}`;
+            monthDisplay.textContent = `Tháng ${mm}/${selectedYear}`;
+
+            populateSelectOptions(yearSelect, getYearItems(), selectedYear);
+
+            document.getElementById('current-month-label').textContent =
+                periodMode === 'year'
+                    ? `Năm ${selectedYear}`
+                    : periodMode === 'day'
+                        ? `Ngày ${dd}/${mm}/${selectedYear}`
+                        : `Tháng ${mm}/${selectedYear}`;
+        }
+
+        // --- CẬP NHẬT TỔNG QUAN & BIỂU ĐỒ ---
+        function updateDashboard() {
+            syncPeriodControls();
+            const periodList = getPeriodTransactions();
+            const totals = getPeriodTotals(periodList);
+
+            document.getElementById('balance-period-label').textContent =
+                periodMode === 'year'
+                    ? 'Số dư trong năm'
+                    : periodMode === 'day'
+                        ? 'Số dư trong ngày'
+                        : 'Số dư trong tháng';
+            document.getElementById('total-balance').textContent = formatVND(totals.balance);
+            document.getElementById('total-income').textContent = '+' + formatVND(totals.income);
+            document.getElementById('total-expense').textContent = '-' + formatVND(totals.expense);
+
+            const previous = getPreviousPeriod();
+            const previousTotals = getPeriodTotals(getPeriodTransactions(previous.month, previous.year, previous.day));
+            document.getElementById('comparison-title').textContent =
+                periodMode === 'year'
+                    ? 'So với năm trước'
+                    : periodMode === 'day'
+                        ? 'So với ngày trước'
+                        : 'So với tháng trước';
+            const incomeChange = document.getElementById('income-change');
+            const expenseChange = document.getElementById('expense-change');
+            incomeChange.textContent = formatPercentChange(totals.income, previousTotals.income);
+            expenseChange.textContent = formatPercentChange(totals.expense, previousTotals.expense);
+            incomeChange.className = `text-sm font-bold mt-1 ${totals.income >= previousTotals.income ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`;
+            expenseChange.className = `text-sm font-bold mt-1 ${totals.expense <= previousTotals.expense ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`;
+
+            const savingsRate = totals.income > 0 ? Math.round((totals.balance / totals.income) * 100) : 0;
+            document.getElementById('savings-rate').textContent = `Tiết kiệm ${savingsRate}%`;
+
+            const recentContainer = document.getElementById('recent-transactions');
+            const sorted = [...periodList].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
+            recentContainer.innerHTML = sorted.length ? sorted.map(t => createCardHTML(t, false)).join('') : '<p class="text-xs text-slate-400 text-center py-2">Chưa có giao dịch trong kỳ này</p>';
+
+            updateChart(periodList);
+            lucide.createIcons();
+        }
+
+        function updateChart(periodList = getPeriodTransactions()) {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            const expenses = periodList.filter(t => t.type === 'expense');
+            const keys = ['food', 'transport', 'housing', 'entertainment', 'other'];
+            const totals = keys.map(k => expenses.filter(t => t.category === k).reduce((s, t) => s + t.amount, 0));
+            const totalSum = totals.reduce((a, b) => a + b, 0);
+
+            document.getElementById('chart-total-label').textContent = formatVND(totalSum);
+
+            const legendContainer = document.getElementById('chart-legend');
+            legendContainer.innerHTML = keys.map((k, i) => {
+                const cat = CATEGORIES[k];
+                const val = totals[i];
+                const pct = totalSum > 0 ? Math.round((val / totalSum) * 100) : 0;
+                return `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full" style="background-color: ${cat.color}"></span>
+                            <span class="text-slate-600 dark:text-slate-300">${cat.name}</span>
+                        </div>
+                        <span class="font-semibold">${pct}%</span>
+                    </div>
+                `;
+            }).join('');
+
+            if (expenseChartInstance) expenseChartInstance.destroy();
+
+            expenseChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: keys.map(k => CATEGORIES[k].name),
+                    datasets: [{
+                        data: totalSum > 0 ? totals : [1],
+                        backgroundColor: totalSum > 0 ? keys.map(k => CATEGORIES[k].color) : ['#cbd5e1'],
+                        borderWidth: 0,
+                        hoverOffset: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: totalSum > 0,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.label}: ${formatVND(context.raw)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createCardHTML(t, showDel = false) {
+            const cat = CATEGORIES[t.category] || CATEGORIES.other;
+            const isInc = t.type === 'income';
+            return `
+                <div onclick="openEditModal(${t.id})" class="flex items-center justify-between p-2.5 bg-white dark:bg-slate-800 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-9 h-9 rounded-xl ${cat.bg} flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="${cat.icon}" class="w-4 h-4"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold truncate">${t.note || cat.name}</p>
+                            <p class="text-[10px] text-slate-400">${cat.name} • ${formatDate(t.date)}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span class="text-xs font-bold ${isInc ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">
+                            ${isInc ? '+' : '-'}${formatVND(t.amount)}
+                        </span>
+                        ${showDel ? `<button onclick="event.stopPropagation(); deleteTx(${t.id})" title="Xóa giao dịch" aria-label="Xóa giao dịch" class="p-1 text-slate-400 hover:text-rose-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHistory() {
+            const typeF = document.getElementById('filter-type').value;
+            const catF = document.getElementById('filter-category').value;
+            let list = getPeriodTransactions().sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (typeF !== 'all') list = list.filter(t => t.type === typeF);
+            if (catF !== 'all') list = list.filter(t => t.category === catF);
+
+            document.getElementById('history-count').textContent = `${list.length} giao dịch`;
+            const container = document.getElementById('full-history-list');
+            container.innerHTML = list.length ? list.map(t => createCardHTML(t, true)).join('') : '<p class="text-xs text-slate-400 text-center py-6">Không tìm thấy giao dịch phù hợp</p>';
+            lucide.createIcons();
+        }
+
+        function exportCsv() {
+            const typeF = document.getElementById('filter-type').value;
+            const catF = document.getElementById('filter-category').value;
+            let list = getPeriodTransactions();
+            if (typeF !== 'all') list = list.filter(t => t.type === typeF);
+            if (catF !== 'all') list = list.filter(t => t.category === catF);
+
+            const escapeCsv = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            const rows = [
+                ['Ngày', 'Loại', 'Danh mục', 'Số tiền', 'Ghi chú'],
+                ...list.map(t => [
+                    formatDate(t.date),
+                    t.type === 'income' ? 'Thu' : 'Chi',
+                    CATEGORIES[t.category]?.name || 'Khác',
+                    t.amount,
+                    t.note || ''
+                ])
+            ];
+            const csv = '\uFEFF' + rows.map(row => row.map(escapeCsv).join(',')).join('\n');
+            const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = periodMode === 'year'
+                ? `giao-dich-${selectedYear}.csv`
+                : periodMode === 'day'
+                    ? `giao-dich-${String(selectedDay).padStart(2, '0')}-${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}.csv`
+                    : `giao-dich-${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showToast('Đã xuất tệp bảng tính');
+        }
+
+        function deleteTx(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            saveToLocalStorage();
+            updateDashboard();
+            renderHistory();
+            showToast('Đã xóa giao dịch');
+        }
+
+        function resetData() {
+            if (confirm('Bạn có chắc muốn xóa sạch toàn bộ dữ liệu?')) {
+                transactions = [];
+                saveToLocalStorage();
+                updateDashboard();
+                renderHistory();
+                showToast('Đã đặt lại dữ liệu');
+            }
+        }
+
+        // --- HỘP THOẠI THÊM / SỬA GIAO DỊCH (DÙNG INPUT DATE CHUẨN GIỐNG THANH CHỌN NGÀY) ---
+        function openAddModal() {
+            editingTransactionId = null;
+            document.getElementById('transaction-modal-title').textContent = 'Thêm giao dịch mới';
+            document.getElementById('transaction-submit-button').textContent = 'Lưu Giao Dịch';
+            const today = new Date();
+            const dateInSelectedPeriod = periodMode === 'day' && selectedYear === today.getFullYear() && selectedMonth === today.getMonth() && selectedDay === today.getDate()
+                ? today
+                : periodMode === 'day'
+                    ? new Date(selectedYear, selectedMonth, selectedDay)
+                    : (selectedYear === today.getFullYear() && selectedMonth === today.getMonth())
+                        ? today
+                        : new Date(selectedYear, selectedMonth, 1);
+            document.getElementById('input-date').value = toLocalIsoDate(dateInSelectedPeriod);
+            document.getElementById('input-amount').value = '';
+            document.getElementById('amount-suggestions').classList.add('hidden');
+            document.getElementById('amount-suggestions').innerHTML = '';
+            document.getElementById('input-note').value = '';
+            setTransactionType('expense');
+            document.getElementById('add-modal').classList.remove('hidden');
+            document.getElementById('add-modal').classList.add('flex');
+        }
+
+        function openEditModal(id) {
+            const transaction = transactions.find(t => t.id === id);
+            if (!transaction) return;
+            editingTransactionId = id;
+            document.getElementById('transaction-modal-title').textContent = 'Sửa giao dịch';
+            document.getElementById('transaction-submit-button').textContent = 'Lưu Thay Đổi';
+            document.getElementById('input-date').value = transaction.date;
+            document.getElementById('input-amount').value = formatAmountDigits(String(transaction.amount));
+            document.getElementById('input-note').value = transaction.note || '';
+            document.getElementById('amount-suggestions').classList.add('hidden');
+            document.getElementById('amount-suggestions').innerHTML = '';
+            setTransactionType(transaction.type);
+            selectedCategory = transaction.category;
+            renderCategoryBtns();
+            document.getElementById('add-modal').classList.remove('hidden');
+            document.getElementById('add-modal').classList.add('flex');
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-modal').classList.add('hidden');
+            document.getElementById('add-modal').classList.remove('flex');
+        }
+
+        function setTransactionType(type) {
+            currentTransactionType = type;
+            const bExp = document.getElementById('btn-type-expense');
+            const bInc = document.getElementById('btn-type-income');
+            if (type === 'expense') {
+                bExp.className = 'py-2 rounded-xl text-xs font-semibold bg-rose-500 text-white shadow-xs transition';
+                bInc.className = 'py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 transition';
+                selectedCategory = 'food';
+            } else {
+                bInc.className = 'py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-white shadow-xs transition';
+                bExp.className = 'py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 transition';
+                selectedCategory = 'salary';
+            }
+            renderCategoryBtns();
+        }
+
+        function renderCategoryBtns() {
+            const container = document.getElementById('category-selector');
+            const keys = currentTransactionType === 'expense' ? ['food', 'transport', 'housing', 'entertainment', 'other'] : ['salary', 'other'];
+            container.innerHTML = keys.map(k => {
+                const cat = CATEGORIES[k];
+                const sel = selectedCategory === k;
+                return `
+                    <button type="button" onclick="selectCat('${k}')" class="flex flex-col items-center justify-center p-2 rounded-2xl border ${sel ? 'border-skyTheme-600 bg-skyTheme-50 dark:bg-skyTheme-950 text-skyTheme-700 dark:text-skyTheme-300' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}">
+                        <i data-lucide="${cat.icon}" class="w-4 h-4 mb-1"></i>
+                        <span class="text-[10px] font-medium">${cat.name}</span>
+                    </button>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function selectCat(k) {
+            selectedCategory = k;
+            renderCategoryBtns();
+        }
+
+        function formatAmountDigits(digits) {
+            return digits ? Number(digits).toLocaleString('vi-VN').replace(/,/g, '.') : '';
+        }
+
+        function handleAmountInput(input) {
+            const digits = input.value.replace(/\D/g, '');
+            if (!digits) {
+                input.value = '';
+                document.getElementById('amount-suggestions').classList.add('hidden');
+                document.getElementById('amount-suggestions').innerHTML = '';
+                return;
+            }
+
+            input.value = formatAmountDigits(digits);
+
+            const suggestionContainer = document.getElementById('amount-suggestions');
+            const base = Number(digits);
+            const minimumScale = digits.length === 1 ? 1000 : digits.length <= 3 ? 100 : 10;
+            const values = [base * minimumScale, base * minimumScale * 10, base * minimumScale * 100, base * minimumScale * 1000]
+                .filter((value, index, all) => all.indexOf(value) === index);
+
+            suggestionContainer.innerHTML = values.map(value =>
+                `<button type="button" onclick="chooseAmount(${value})" class="py-2 px-2 rounded-xl border border-skyTheme-100 dark:border-skyTheme-900 bg-skyTheme-50 dark:bg-skyTheme-950/50 text-skyTheme-700 dark:text-skyTheme-300 text-xs font-bold hover:bg-skyTheme-100 dark:hover:bg-skyTheme-900 transition">${formatAmountDigits(String(value))} ₫</button>`
+            ).join('');
+            suggestionContainer.classList.add('hidden');
+        }
+
+        function chooseAmount(amount) {
+            document.getElementById('input-amount').value = formatAmountDigits(String(amount));
+            document.getElementById('amount-suggestions').classList.add('hidden');
+        }
+
+        function handleAddTransaction(e) {
+            e.preventDefault();
+            const amount = parseInt(document.getElementById('input-amount').value.replace(/\D/g, ''), 10);
+            const date = document.getElementById('input-date').value;
+            const note = document.getElementById('input-note').value.trim();
+
+            if (!amount || amount <= 0 || !date) return;
+
+            const isEditing = editingTransactionId !== null;
+            if (editingTransactionId !== null) {
+                const transaction = transactions.find(t => t.id === editingTransactionId);
+                if (transaction) {
+                    transaction.type = currentTransactionType;
+                    transaction.category = selectedCategory;
+                    transaction.amount = amount;
+                    transaction.date = date;
+                    transaction.note = note || CATEGORIES[selectedCategory].name;
+                }
+            } else {
+                transactions.unshift({
+                    id: Date.now(),
+                    type: currentTransactionType,
+                    category: selectedCategory,
+                    amount: amount,
+                    date: date,
+                    note: note || CATEGORIES[selectedCategory].name
+                });
+            }
+
+            saveToLocalStorage();
+            closeAddModal();
+            editingTransactionId = null;
+            updateDashboard();
+            renderHistory();
+            showToast(isEditing ? 'Đã lưu thay đổi!' : 'Đã thêm giao dịch!');
+        }
+
+        function initFilterCategories() {
+            const sel = document.getElementById('filter-category');
+            Object.keys(CATEGORIES).forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.textContent = CATEGORIES[k].name;
+                sel.appendChild(opt);
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderGreeting();
+            initFilterCategories();
+            syncPeriodControls();
+            lucide.createIcons();
+            updateDashboard();
+        });
+    </script>
+</body>
+</html>
